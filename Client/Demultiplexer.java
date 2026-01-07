@@ -10,11 +10,11 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Demultiplexer implements AutoCloseable {
     private final Connection conn;
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock lock = new ReentrantLock();  // lock do map
     private final Map<Integer, Entry> map = new HashMap<>();
     private IOException exception = null;
 
-    private class Entry {
+    private class Entry {    // cada thread que espera resposta cria uma entry
         byte[] data = null;
         Condition cond = lock.newCondition();
     }
@@ -27,21 +27,21 @@ public class Demultiplexer implements AutoCloseable {
         new Thread(() -> {
             try {
                 while (true) {
-                    Connection.Frame frame = conn.receive(); 
+                    Connection.Frame frame = conn.receive();  // recebe resposta
                     
                     lock.lock();
                     try {
-                        Entry e = map.get(frame.tag);
+                        Entry e = map.get(frame.tag);   // procura quem esta a espera
                         if (e != null) {
                             e.data = frame.data;
-                            e.cond.signal();  // Acorda quem espera
+                            e.cond.signal();  // acorda a thread que espera
                         }
                     } finally {
                         lock.unlock();
                     }
                 }
             } catch (IOException e) {
-                // Conexão fechou - acorda todos
+                // acorda todos porque a conexão falhou
                 lock.lock();
                 try {
                     exception = e;

@@ -10,4 +10,5 @@ public class Protocolo {
     public static final byte STATUS_ERROR = 1;
     public static final byte STATUS_INVALID_CREDENTIALS = 2;
     public static final byte STATUS_USER_EXISTS = 3;
+    public static final byte STATUS_NOT_AUTHENTICATED= 4;
 }
