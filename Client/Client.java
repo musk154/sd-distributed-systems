@@ -129,15 +129,7 @@ public class Client implements AutoCloseable {
         return -1;
     }
 
-    // ==================== MÉTODOS DE AGREGAÇÃO ====================
-
-    /**
-     * Obtém a quantidade de unidades de um produto vendidas nos últimos d dias.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias anteriores (1 ≤ d ≤ D)
-     * @return Quantidade vendida, ou null se erro/dados insuficientes
-     */
+    
     public Integer getQuantitySold(String product, int days) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
@@ -161,13 +153,7 @@ public class Client implements AutoCloseable {
         return null;
     }
 
-    /**
-     * Obtém o volume (valor total €) de vendas de um produto nos últimos d dias.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias anteriores (1 ≤ d ≤ D)
-     * @return Volume de vendas em €, ou null se erro/dados insuficientes
-     */
+    
     public Double getSalesVolume(String product, int days) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
@@ -191,13 +177,7 @@ public class Client implements AutoCloseable {
         return null;
     }
 
-    /**
-     * Obtém o preço médio de venda de um produto nos últimos d dias.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias anteriores (1 ≤ d ≤ D)
-     * @return Preço médio em €, ou null se erro/dados insuficientes
-     */
+    
     public Double getAveragePrice(String product, int days) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
@@ -221,13 +201,7 @@ public class Client implements AutoCloseable {
         return null;
     }
 
-    /**
-     * Obtém o preço máximo de venda de um produto nos últimos d dias.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias anteriores (1 ≤ d ≤ D)
-     * @return Preço máximo em €, ou null se erro/dados insuficientes
-     */
+    
     public Double getMaxPrice(String product, int days) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
