@@ -2,18 +2,19 @@ package Server;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Auth {
     private final Map<String, User> users = new HashMap<>();
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public Auth() {
         this.users.put("admin", new User("admin", "admin", true));
     }
 
     public boolean register(String username, String pass){
-        this.lock.lock();
+        this.lock.writeLock().lock();
         boolean aux;
         try{
             if (!this.users.containsKey(username)){
@@ -24,13 +25,13 @@ public class Auth {
 
             aux = false;
         } finally{
-            lock.unlock();
+            lock.writeLock().unlock();
         }
         return aux;
     }
 
     public User login( String username, String pass){
-        this.lock.lock();
+        this.lock.readLock().lock();
 
         User res;
 
@@ -43,7 +44,7 @@ public class Auth {
             res = null;
 
         } finally {
-            this.lock.unlock();
+            this.lock.readLock().unlock();
         }
         return res;
     }

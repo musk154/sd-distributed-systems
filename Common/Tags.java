@@ -1,6 +1,6 @@
 package Common;
 
-public class Protocolo {
+public class Tags {
     // Tags de operação
     public static final int TAG_LOGIN = 1;
     public static final int TAG_REGISTER = 2;
