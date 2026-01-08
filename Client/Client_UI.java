@@ -61,7 +61,7 @@ public class Client_UI {
                     } else {
                         System.out.println("Username já existe.");
                     }
-                } else if( op.equals("2")) {
+                } else if (op.equals("2")) {
                     System.out.println("Adeus!");
                     System.exit(0);
                 }
@@ -75,12 +75,12 @@ public class Client_UI {
         while (true) {
             System.out.println("\n=== Menu Principal ===");
             System.out.println("0 - Adicionar evento de venda");
-            System.out.println("1 - Ver em que dia estamos");
-
+            System.out.println("1 - Ver dia atual");
+            System.out.println("2 - Consultar agregações");
             if (client.isAdmin()) {
-                System.out.println("2 - Avançar dia (ADMIN)");
+                System.out.println("3 - Avançar dia (ADMIN)");
             }
-            System.out.println("3 - Sair");
+            System.out.println("9 - Sair");
             System.out.print("> ");
 
             String op = sc.nextLine();
@@ -95,6 +95,10 @@ public class Client_UI {
                         break;
 
                     case "2":
+                        menuAgregacoes();
+                        break;
+
+                    case "3":
                         if (client.isAdmin()) {
                             menuNewDay();
                         } else {
@@ -102,7 +106,7 @@ public class Client_UI {
                         }
                         break;
 
-                    case "3":
+                    case "9":
                         System.out.println("Adeus!");
                         return;
                         
@@ -114,7 +118,6 @@ public class Client_UI {
             }
         }
     }
-
 
     private void menuAddEvent() throws IOException {
         System.out.print("Produto: ");
@@ -165,7 +168,122 @@ public class Client_UI {
         } else {
             System.out.println("Erro ao avançar dia (apenas admin pode fazer isto).");
         }
-
     }
 
+    // ==================== MENU DE AGREGAÇÕES ====================
+
+    private void menuAgregacoes() throws IOException {
+        System.out.println("\n=== Agregações (dias anteriores) ===");
+        System.out.println("0 - Quantidade vendida");
+        System.out.println("1 - Volume de vendas (valor total)");
+        System.out.println("2 - Preço médio");
+        System.out.println("3 - Preço máximo");
+        System.out.println("4 - Todas as agregações de um produto");
+        System.out.println("9 - Voltar");
+        System.out.print("> ");
+
+        String op = sc.nextLine();
+
+        if (op.equals("9")) return;
+
+        // Para todas as opções, pedir produto e dias
+        System.out.print("Produto: ");
+        String product = sc.nextLine();
+        if (product.isEmpty()) {
+            System.out.println("Produto não pode ser vazio.");
+            return;
+        }
+
+        System.out.print("Número de dias anteriores: ");
+        int days;
+        try {
+            days = Integer.parseInt(sc.nextLine());
+            if (days < 1) {
+                System.out.println("Dias deve ser >= 1.");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("Número inválido.");
+            return;
+        }
+
+        switch (op) {
+            case "0":
+                handleQuantidade(product, days);
+                break;
+            case "1":
+                handleVolume(product, days);
+                break;
+            case "2":
+                handlePrecoMedio(product, days);
+                break;
+            case "3":
+                handlePrecoMaximo(product, days);
+                break;
+            case "4":
+                handleTodasAgregacoes(product, days);
+                break;
+            default:
+                System.out.println("Opção inválida.");
+        }
+    }
+
+    private void handleQuantidade(String product, int days) throws IOException {
+        Integer qty = client.getQuantitySold(product, days);
+        if (qty != null) {
+            System.out.printf("Quantidade de '%s' vendida nos últimos %d dias: %d unidades%n", 
+                              product, days, qty);
+        } else {
+            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+        }
+    }
+
+    private void handleVolume(String product, int days) throws IOException {
+        Double vol = client.getSalesVolume(product, days);
+        if (vol != null) {
+            System.out.printf("Volume de vendas de '%s' nos últimos %d dias: %.2f€%n", 
+                              product, days, vol);
+        } else {
+            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+        }
+    }
+
+    private void handlePrecoMedio(String product, int days) throws IOException {
+        Double avg = client.getAveragePrice(product, days);
+        if (avg != null) {
+            System.out.printf("Preço médio de '%s' nos últimos %d dias: %.2f€%n", 
+                              product, days, avg);
+        } else {
+            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+        }
+    }
+
+    private void handlePrecoMaximo(String product, int days) throws IOException {
+        Double max = client.getMaxPrice(product, days);
+        if (max != null) {
+            System.out.printf("Preço máximo de '%s' nos últimos %d dias: %.2f€%n", 
+                              product, days, max);
+        } else {
+            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+        }
+    }
+
+    private void handleTodasAgregacoes(String product, int days) throws IOException {
+        System.out.println("\n--- Agregações para '" + product + "' (últimos " + days + " dias) ---");
+        
+        Integer qty = client.getQuantitySold(product, days);
+        Double vol = client.getSalesVolume(product, days);
+        Double avg = client.getAveragePrice(product, days);
+        Double max = client.getMaxPrice(product, days);
+
+        if (qty == null && vol == null && avg == null && max == null) {
+            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            return;
+        }
+
+        if (qty != null) System.out.printf("  Quantidade vendida: %d unidades%n", qty);
+        if (vol != null) System.out.printf("  Volume de vendas:   %.2f€%n", vol);
+        if (avg != null) System.out.printf("  Preço médio:        %.2f€%n", avg);
+        if (max != null) System.out.printf("  Preço máximo:       %.2f€%n", max);
+    }
 }

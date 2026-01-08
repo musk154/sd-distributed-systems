@@ -129,7 +129,127 @@ public class Client implements AutoCloseable {
         return -1;
     }
 
+    // ==================== MÉTODOS DE AGREGAÇÃO ====================
 
+    /**
+     * Obtém a quantidade de unidades de um produto vendidas nos últimos d dias.
+     * 
+     * @param product Nome do produto
+     * @param days Número de dias anteriores (1 ≤ d ≤ D)
+     * @return Quantidade vendida, ou null se erro/dados insuficientes
+     */
+    public Integer getQuantitySold(String product, int days) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_AGG_QUANTITY);
+        dos.writeUTF(product);
+        dos.writeInt(days);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            byte status = dis.readByte();
+            if (status == Tags.STATUS_OK) {
+                return dis.readInt();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
+
+    /**
+     * Obtém o volume (valor total €) de vendas de um produto nos últimos d dias.
+     * 
+     * @param product Nome do produto
+     * @param days Número de dias anteriores (1 ≤ d ≤ D)
+     * @return Volume de vendas em €, ou null se erro/dados insuficientes
+     */
+    public Double getSalesVolume(String product, int days) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_AGG_VOLUME);
+        dos.writeUTF(product);
+        dos.writeInt(days);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            byte status = dis.readByte();
+            if (status == Tags.STATUS_OK) {
+                return dis.readDouble();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
+
+    /**
+     * Obtém o preço médio de venda de um produto nos últimos d dias.
+     * 
+     * @param product Nome do produto
+     * @param days Número de dias anteriores (1 ≤ d ≤ D)
+     * @return Preço médio em €, ou null se erro/dados insuficientes
+     */
+    public Double getAveragePrice(String product, int days) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_AGG_AVG_PRICE);
+        dos.writeUTF(product);
+        dos.writeInt(days);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            byte status = dis.readByte();
+            if (status == Tags.STATUS_OK) {
+                return dis.readDouble();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
+
+    /**
+     * Obtém o preço máximo de venda de um produto nos últimos d dias.
+     * 
+     * @param product Nome do produto
+     * @param days Número de dias anteriores (1 ≤ d ≤ D)
+     * @return Preço máximo em €, ou null se erro/dados insuficientes
+     */
+    public Double getMaxPrice(String product, int days) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_AGG_MAX_PRICE);
+        dos.writeUTF(product);
+        dos.writeInt(days);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            byte status = dis.readByte();
+            if (status == Tags.STATUS_OK) {
+                return dis.readDouble();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
 
     public boolean isAuthenticated() { return authenticated; }
     public boolean isAdmin() { return admin; }
