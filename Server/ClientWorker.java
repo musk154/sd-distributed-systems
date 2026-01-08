@@ -15,6 +15,7 @@ public class ClientWorker implements Runnable {
     private final Socket socket;
     private final Auth auth;
     private final ThreadPool pool;
+    private final TimeSeriesManager tsManager;
     private Connection conn;
     private User user = null;  
     private final ReadWriteLock userLock = new ReentrantReadWriteLock();  // lock do user para prevenir de 2 threads diferentes tentem mexer no user ao mesmo tempo 
@@ -37,10 +38,11 @@ public class ClientWorker implements Runnable {
         }
     }
 
-    public ClientWorker (Socket socket, Auth auth, ThreadPool pool){
+    public ClientWorker (Socket socket, Auth auth, ThreadPool pool, TimeSeriesManager tsManager){
         this.socket=socket;
         this.auth=auth;
         this.pool=pool;
+        this.tsManager=tsManager;
     }
 
     private class Task implements Runnable {
@@ -97,7 +99,7 @@ public class ClientWorker implements Runnable {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
 
-        if (operationType != Tags.TAG_LOGIN && operationType != Tags.TAG_REGISTER) {
+        if (operationType != Tags.TAG_LOGIN && operationType != Tags.TAG_REGISTER) {  // extra proteção para só analisar pedidos autenticados
             if(getUser() == null){
                 dos.writeByte(Tags.STATUS_NOT_AUTHENTICATED);
                 conn.send(routingTag, baos.toByteArray());
@@ -107,33 +109,23 @@ public class ClientWorker implements Runnable {
         }
 
         switch (operationType) {
-            case Tags.TAG_LOGIN: {
-                String username = dis.readUTF();
-                String password = dis.readUTF();
-                User u = auth.login(username, password);
-                if (u != null) {
-                    setUser(u);
-                    dos.writeByte(Tags.STATUS_OK);
-                    dos.writeBoolean(u.admin);
-                    System.out.println("[AUTH] Login OK: " + username);
-                } else {
-                    dos.writeByte(Tags.STATUS_INVALID_CREDENTIALS);
-                    System.out.println("[AUTH] Login FALHOU: " + username);
-                }
+            case Tags.TAG_LOGIN:
+                handleLogin(dis, dos);
                 break;
-            }
-            case Tags.TAG_REGISTER: {
-                String username = dis.readUTF();
-                String password = dis.readUTF();
-                if (auth.register(username, password)) {
-                    dos.writeByte(Tags.STATUS_OK);
-                    System.out.println("[AUTH] Registo OK: " + username);
-                } else {
-                    dos.writeByte(Tags.STATUS_USER_EXISTS);
-                    System.out.println("[AUTH] Registo FALHOU: " + username);
-                }
+                
+            case Tags.TAG_REGISTER:
+                handleRegister(dis, dos);
                 break;
-            }
+            
+            case Tags.TAG_ADD_EVENT:
+                handleAddEvent(dis, dos);
+                break;
+                
+            case Tags.TAG_NEW_DAY:
+                handleNewDay(dis, dos);
+                break;
+                case Tags.TAG_GET_CURRENT_DAY:
+                handleCurrentDay(dis, dos);
             default:
                 dos.writeByte(Tags.STATUS_ERROR);
         }
@@ -141,5 +133,88 @@ public class ClientWorker implements Runnable {
         // Envia resposta com a mesma tag (TaggedConnection já tem lock)
         conn.send(routingTag, baos.toByteArray());
     }
+
+
+
+    private void handleLogin(DataInputStream dis, DataOutputStream dos) throws IOException {
+        String username = dis.readUTF();
+        String password = dis.readUTF();
+        
+        User u = auth.login(username, password);
+        if (u != null) {
+            setUser(u);
+            dos.writeByte(Tags.STATUS_OK);
+            dos.writeBoolean(u.admin);
+            System.out.println("[AUTH] Login OK: " + username);
+        } else {
+            dos.writeByte(Tags.STATUS_INVALID_CREDENTIALS);
+            System.out.println("[AUTH] Login FALHOU: " + username);
+        }
+    }
+
+    private void handleRegister(DataInputStream dis, DataOutputStream dos) throws IOException {
+        String username = dis.readUTF();
+        String password = dis.readUTF();
+        
+        if (auth.register(username, password)) {
+            dos.writeByte(Tags.STATUS_OK);
+            System.out.println("[AUTH] Registo OK: " + username);
+        } else {
+            dos.writeByte(Tags.STATUS_USER_EXISTS);
+            System.out.println("[AUTH] Registo FALHOU: " + username);
+        }
+    }
     
+    
+    /**
+     * Adiciona um evento ao dia corrente.
+     * Formato do pedido: [TAG_ADD_EVENT][product:UTF][quantity:int][price:double]
+     * Formato da resposta: [STATUS_OK]
+     */
+    private void handleAddEvent(DataInputStream dis, DataOutputStream dos) throws IOException {
+        String product = dis.readUTF();
+        int quantity = dis.readInt();
+        double price = dis.readDouble();
+        
+        // Validar parâmetros
+        if (product == null || product.isEmpty() || quantity <= 0 || price < 0) {
+            dos.writeByte(Tags.STATUS_INVALID_PARAMS);
+            return;
+        }
+        
+        // Adicionar evento ao dia corrente
+        tsManager.addEvent(product, quantity, price);
+        
+        dos.writeByte(Tags.STATUS_OK);
+        System.out.println("Adicionado: " + product + " " + quantity + " vezes a " + price + "€");
+    }
+
+    /**
+     * Avança para um novo dia (apenas admin).
+     * Formato do pedido: [TAG_NEW_DAY]
+     * Formato da resposta: [STATUS_OK][newDayId:int]
+     */
+    private void handleNewDay(DataInputStream dis, DataOutputStream dos) throws IOException {
+        // Verificar se é admin
+        User currentUser = getUser();
+        if (currentUser == null || !currentUser.admin) {
+            dos.writeByte(Tags.STATUS_NOT_ADMIN);
+            System.out.println("User ão é admin");
+            return;
+        }
+        
+        // Avançar dia
+        tsManager.newDay();
+        int newDayId = tsManager.getCurrentDayId();
+        
+        dos.writeByte(Tags.STATUS_OK);
+        dos.writeInt(newDayId);
+        System.out.println("Novo dia: " + newDayId);
+    }
+
+    private void handleCurrentDay(DataInputStream dis, DataOutputStream dos) throws IOException {
+        int currentDay = tsManager.getCurrentDayId();
+        dos.writeByte(Tags.STATUS_OK);
+        dos.writeInt(currentDay);
+    }
 }

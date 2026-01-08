@@ -4,11 +4,13 @@ import Common.Connection;
 import Common.Tags;
 import java.io.*;
 import java.net.Socket;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Client implements AutoCloseable {
     private final Demultiplexer demux;
-    private final AtomicInteger tagCounter = new AtomicInteger(0);
+    private int tagCounter = 0;
+    private final Lock lock = new ReentrantLock();
     private boolean authenticated = false;
     private boolean admin = false;
 
@@ -19,7 +21,12 @@ public class Client implements AutoCloseable {
     }
 
     private int nextTag() {
-        return tagCounter.incrementAndGet();
+        lock.lock();
+        try {
+            return tagCounter++;
+        } finally {
+            lock.unlock();
+        }
     }
 
     public boolean login(String username, String password) throws IOException {
@@ -63,6 +70,66 @@ public class Client implements AutoCloseable {
         }
         return false;
     }
+
+    public boolean addEvent(String product, int quantity, double price) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_ADD_EVENT);
+        dos.writeUTF(product);
+        dos.writeInt(quantity);
+        dos.writeDouble(price);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            return resp[0] == Tags.STATUS_OK;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return false;
+    }
+
+    public int newDay() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_NEW_DAY);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            if (dis.readByte() == Tags.STATUS_OK) {
+                return dis.readInt();  // Retorna o ID do novo dia
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return -1;
+    }
+    public int getCurrentDayId() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_GET_CURRENT_DAY);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            if (dis.readByte() == Tags.STATUS_OK) {
+                return dis.readInt();  // Retorna o ID do dia atual
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return -1;
+    }
+
+
 
     public boolean isAuthenticated() { return authenticated; }
     public boolean isAdmin() { return admin; }
