@@ -1,17 +1,17 @@
 package Server;
 
 /**
- * Representa as agregações calculadas para um produto num dia específico.
- * Esta classe serve como cache para evitar recalcular agregações.
+ * Agregações calculadas para um produto num dia específico
+ * Classe serve como cache para evitar recalcular agregações várias vezess
  * 
- * Imutável após criação - thread-safe.
+ * Imutável após criação - thread-safe
  */
 public class ProductAggregation {
     private final String product;
     private final int totalQuantity;      // Quantidade total vendida
-    private final double totalVolume;     // Volume total de vendas (valor €)
+    private final double totalVolume;     // Volume total de vendas em euros
     private final double maxPrice;        // Preço máximo de venda
-    private final int eventCount;         // Número de eventos (para calcular média)
+    private final int eventCount;         // Número de eventos
 
     public ProductAggregation(String product, int totalQuantity, double totalVolume, 
                               double maxPrice, int eventCount) {
@@ -43,20 +43,17 @@ public class ProductAggregation {
     }
 
     /**
-     * Calcula o preço médio de venda.
-     * @return Preço médio, ou 0.0 se não houver eventos
+     * Calcula o preço médio de venda. 0 se não houver eventos
      */
     public double getAveragePrice() {
         if (eventCount == 0) {
             return 0.0;
         }
-        return totalVolume / totalQuantity;  // Volume / Quantidade = Preço médio ponderado
+        return totalVolume / totalQuantity;  
     }
 
     /**
-     * Combina duas agregações do mesmo produto (para agregação multi-dia).
-     * @param other Outra agregação do mesmo produto
-     * @return Nova agregação combinada
+     * Combina duas agregações do mesmo produto (para agregação multi-dia)
      */
     public ProductAggregation combine(ProductAggregation other) {
         if (other == null) {
