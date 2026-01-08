@@ -88,13 +88,13 @@ public class ClientWorker implements Runnable {
         } catch (IOException e){
             System.err.println("Erro: " + e.getMessage());
         } finally {
-            try { socket.close(); } catch (IOException ignored) {}  // ← try-catch
+            try { socket.close(); } catch (IOException ignored) {}  // try-catch
         }
     }
 
     private void processRequest(int routingTag, byte[] data) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
-        int operationType = dis.readInt();   // lê primeiro byte da data que é a tag da tarefa
+        int operationType = dis.readInt();   // lê o primeiro byte da data que é a tag da tarefa
         
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
@@ -206,7 +206,7 @@ public class ClientWorker implements Runnable {
     }
 
     /**
-     * Avança para um novo dia (apenas admin).
+     * Avança para um novo dia (apenas o admin).
      * Formato do pedido: [TAG_NEW_DAY]
      * Formato da resposta: [STATUS_OK][newDayId:int]
      */
@@ -234,11 +234,8 @@ public class ClientWorker implements Runnable {
         dos.writeInt(currentDay);
     }
 
-    // ==================== HANDLERS DE AGREGAÇÃO ====================
-    
     /**
-     * Quantidade de vendas: devolve a quantidade de unidades de um produto p 
-     * vendidas nos últimos d dias anteriores.
+     * Quantidade vendas: devolve a quantidade de unidades de um produto vendidas nos últimos d dias 
      * Formato do pedido: [TAG_AGG_QUANTITY][product:UTF][days:int]
      * Formato da resposta: [STATUS_OK][quantity:int] ou [STATUS_NOT_ENOUGH_DATA]
      */
@@ -265,8 +262,7 @@ public class ClientWorker implements Runnable {
     }
     
     /**
-     * Volume de vendas: devolve o valor total das vendas de um produto p 
-     * nos últimos d dias anteriores.
+     * Volume vendas: devolve o valor total das vendas de um produto nos últimos d dias 
      * Formato do pedido: [TAG_AGG_VOLUME][product:UTF][days:int]
      * Formato da resposta: [STATUS_OK][volume:double] ou [STATUS_NOT_ENOUGH_DATA]
      */
@@ -291,8 +287,7 @@ public class ClientWorker implements Runnable {
     }
     
     /**
-     * Preço médio de venda: devolve o preço médio de venda de um produto p 
-     * nos últimos d dias anteriores.
+     * Preço médio venda: devolve o preço médio de venda de um produto nos últimos d dias 
      * Formato do pedido: [TAG_AGG_AVG_PRICE][product:UTF][days:int]
      * Formato da resposta: [STATUS_OK][avgPrice:double] ou [STATUS_NOT_ENOUGH_DATA]
      */
@@ -323,8 +318,7 @@ public class ClientWorker implements Runnable {
     }
     
     /**
-     * Preço máximo de venda: devolve o preço máximo de venda de um produto p 
-     * nos últimos d dias anteriores.
+     * Preço máximo venda: devolve o preço máximo de venda de um produto nos últimos d dias 
      * Formato do pedido: [TAG_AGG_MAX_PRICE][product:UTF][days:int]
      * Formato da resposta: [STATUS_OK][maxPrice:double] ou [STATUS_NOT_ENOUGH_DATA]
      */

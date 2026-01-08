@@ -9,7 +9,7 @@ public class Server {
     public static void main(String[] args) throws IOException {
         int port = 12345;
         int numWorkers = 10;
-        int maxDays = 30;  // D = máximo de dias históricos
+        int maxDays = 30;  // máximo de dias histórico
         
         Auth auth = new Auth();
         ThreadPool pool = new ThreadPool(numWorkers);

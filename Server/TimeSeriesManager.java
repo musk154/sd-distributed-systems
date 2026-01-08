@@ -8,9 +8,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TimeSeriesManager {
     
-    private final int maxDays;  // D - número máximo de dias históricos a guardar
-    private final List<DayData> historicalDays;  // Dias já completos
-    private DayData currentDay;  // Dia atual (onde chegam eventos)
+    private final int maxDays;  // número máximo de dias histórico a guardar
+    private final List<DayData> historicalDays;  // Dias completos
+    private DayData currentDay;  // Dia atual (onde chegam eventos novos)
     private int currentDayId;    // ID do dia atual
     private final ReentrantReadWriteLock lock;  // Para thread-safety
     
@@ -18,7 +18,7 @@ public class TimeSeriesManager {
         final int dayId;
         final List<Event> events;
         boolean completed;
-        // Cache lazy de agregações por produto (só calculado quando pedido)
+        // Cache lazy de agregações por produto 
         final Map<String, ProductAggregation> aggregationCache;
         
         DayData(int dayId) {
@@ -63,7 +63,7 @@ public class TimeSeriesManager {
         }
         
         /**
-         * Limpa o cache de agregações (usado quando o dia é descartado).
+         * Limpa o cache de agregações (quando o dia é descartado usa isto)
          */
         void clearCache() {
             aggregationCache.clear();
@@ -109,13 +109,13 @@ public class TimeSeriesManager {
             // 2. Adicionar ao início do histórico (mais recente primeiro)
             historicalDays.add(0, currentDay);
             
-            // 3. Remover dias antigos se exceder o limite D (limpar cache antes)
+            // 3. Remover dias antigos se exceder o limite máximo q estabelecemos (limpar cache antes)
             while (historicalDays.size() > maxDays) {
                 DayData oldDay = historicalDays.remove(historicalDays.size() - 1);
                 oldDay.clearCache();  // Descartar cache que já não é relevante
             }
             
-            // 4. Criar novo dia corrente
+            // 4. Criar um novo dia corrente
             currentDayId++;
             currentDay = new DayData(currentDayId);
             
@@ -205,7 +205,7 @@ public class TimeSeriesManager {
     }
     
     public int getMaxDays() {
-        return maxDays;  // Imutável, não precisa de lock
+        return maxDays;  
     }
     
     public int getHistoricalDayCount() {
@@ -225,16 +225,10 @@ public class TimeSeriesManager {
             lock.readLock().unlock();
         }
     }
-
-    // ==================== MÉTODOS DE AGREGAÇÃO (LAZY, COM CACHE) ====================
     
     /**
      * Obtém a agregação combinada para um produto nos últimos d dias.
      * Usa cache por dia - só calcula uma vez por produto/dia.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias anteriores (1 ≤ d ≤ D)
-     * @return Agregação combinada ou null se não houver dados suficientes
      */
     private ProductAggregation getAggregation(String product, int days) {
         lock.readLock().lock();
@@ -265,12 +259,7 @@ public class TimeSeriesManager {
     }
     
     /**
-     * Quantidade de vendas: devolve a quantidade de unidades de um produto p 
-     * vendidas nos últimos d dias anteriores.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias (1 ≤ d ≤ D)
-     * @return Quantidade vendida, ou -1 se não houver dados suficientes
+     * Quantidade vendas: devolve a quantidade de unidades de um produto p vendidas nos últimos d dias 
      */
     public int getQuantitySold(String product, int days) {
         if (days < 1 || days > maxDays) {
@@ -285,12 +274,7 @@ public class TimeSeriesManager {
     }
     
     /**
-     * Volume de vendas: devolve o valor total das vendas de um produto p 
-     * nos últimos d dias anteriores.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias (1 ≤ d ≤ D)
-     * @return Volume de vendas em €, ou -1 se não houver dados suficientes
+     * Volume de vendas: devolve o valor total das vendas de um produto nos últimos d dias 
      */
     public double getSalesVolume(String product, int days) {
         if (days < 1 || days > maxDays) {
@@ -305,12 +289,7 @@ public class TimeSeriesManager {
     }
     
     /**
-     * Preço médio de venda: devolve o preço médio de venda de um produto p 
-     * nos últimos d dias anteriores (ponderado pela quantidade).
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias (1 ≤ d ≤ D)
-     * @return Preço médio, ou -1 se não houver dados suficientes
+     * Preço médio venda: devolve o preço médio de venda de um produtonos últimos d dias (ponderado pela quantidade)
      */
     public double getAveragePrice(String product, int days) {
         if (days < 1 || days > maxDays) {
@@ -325,12 +304,7 @@ public class TimeSeriesManager {
     }
     
     /**
-     * Preço máximo de venda: devolve o preço máximo de venda de um produto p 
-     * nos últimos d dias anteriores.
-     * 
-     * @param product Nome do produto
-     * @param days Número de dias (1 ≤ d ≤ D)
-     * @return Preço máximo, ou -1 se não houver dados suficientes
+     * Preço máximo de venda: devolve o preço máximo de venda de um produto nos últimos d dias
      */
     public double getMaxPrice(String product, int days) {
         if (days < 1 || days > maxDays) {
