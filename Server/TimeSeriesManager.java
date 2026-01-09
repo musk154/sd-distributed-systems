@@ -1,10 +1,14 @@
 package Server;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import Common.Event;
@@ -15,61 +19,49 @@ public class TimeSeriesManager {
     private final List<DayData> historicalDays;  // Dias completos
     private DayData currentDay;  // Dia atual (onde chegam eventos novos)
     private int currentDayId;    // ID do dia atual
-    private final ReentrantReadWriteLock lock;  // Para thread-safety
+    private final ReentrantReadWriteLock lock; 
+
+
+    private final List<SimultaneousNotifier> simultaneousNotifiers;
+    private final Set<String> productsSoldToday;
+
+    private final List<ConsecutiveNotifier> consecutiveNotifiers;
+    private String lastProduct;
+    private int consecutiveCount;
+
     
-    private static class DayData {
-        final int dayId;
-        final List<Event> events;
-        boolean completed;
-        // Cache lazy de agregações por produto 
-        final Map<String, ProductAggregation> aggregationCache;
-        
-        DayData(int dayId) {
-            this.dayId = dayId;
-            this.events = new ArrayList<>();
-            this.completed = false;
-            this.aggregationCache = new ConcurrentHashMap<>();
+
+    private static class SimultaneousNotifier {
+        final String p1;
+        final String p2;
+        final Condition condition;
+        boolean satisfied;
+        boolean dayEnded;
+
+        SimultaneousNotifier(String p1, String p2, Condition condition) {
+            this.p1 = p1;
+            this.p2 = p2;
+            this.condition = condition;
+            this.satisfied = false;
+            this.dayEnded = false;
         }
         
-        /**
-         * Obtém a agregação para um produto (lazy - calcula na primeira vez).
-         * Thread-safe usando ConcurrentHashMap.computeIfAbsent.
-         */
-        ProductAggregation getAggregation(String product) {
-            return aggregationCache.computeIfAbsent(product, this::computeAggregation);
+        boolean checkCondition(Set<String> soldProducts) {
+            return soldProducts.contains(p1) && soldProducts.contains(p2);
         }
-        
-        /**
-         * Calcula a agregação para um produto percorrendo todos os eventos do dia.
-         */
-        private ProductAggregation computeAggregation(String product) {
-            int totalQty = 0;
-            double totalVol = 0.0;
-            double maxPrice = Double.MIN_VALUE;
-            int count = 0;
-            
-            for (Event event : events) {
-                if (event.getProduct().equals(product)) {
-                    totalQty += event.getQuantity();
-                    totalVol += event.getQuantity() * event.getPrice();
-                    maxPrice = Math.max(maxPrice, event.getPrice());
-                    count++;
-                }
-            }
-            
-            // Se não há eventos para este produto, retorna agregação vazia
-            if (count == 0) {
-                return new ProductAggregation(product, 0, 0.0, 0.0, 0);
-            }
-            
-            return new ProductAggregation(product, totalQty, totalVol, maxPrice, count);
-        }
-        
-        /**
-         * Limpa o cache de agregações (quando o dia é descartado usa isto)
-         */
-        void clearCache() {
-            aggregationCache.clear();
+    }
+    
+    private static class ConsecutiveNotifier {
+        final int n;
+        final Condition condition;
+        String satisfiedProduct;
+        boolean dayEnded;
+
+        ConsecutiveNotifier(int n, Condition condition) {
+            this.n = n;
+            this.condition = condition;
+            this.satisfiedProduct = null;
+            this.dayEnded = false;
         }
     }
 
@@ -82,6 +74,12 @@ public class TimeSeriesManager {
         this.currentDayId = 0;
         this.currentDay = new DayData(currentDayId);
         this.lock = new ReentrantReadWriteLock();
+        
+        this.simultaneousNotifiers = new ArrayList<>();
+        this.productsSoldToday = new HashSet<>();
+        this.consecutiveNotifiers = new ArrayList<>();
+        this.lastProduct = null;
+        this.consecutiveCount = 0;
     }
 
     public void addEvent(String product, int quantity, double price) {
@@ -89,38 +87,76 @@ public class TimeSeriesManager {
         try {
             Event event = new Event(product, quantity, price);
             currentDay.events.add(event);
+            
+            // Atualizar produtos vendidos hoje (para simultâneas)
+            productsSoldToday.add(product);
+            
+            // Atualizar contagem consecutiva
+            if (product.equals(lastProduct)) {
+                consecutiveCount++;
+            } else {
+                lastProduct = product;
+                consecutiveCount = 1;
+            }
+            // Verificar e acordar notifiers de vendas simultâneas
+            for (SimultaneousNotifier waiter : simultaneousNotifiers) {
+                if (!waiter.satisfied && waiter.checkCondition(productsSoldToday)) {
+                    waiter.satisfied = true;
+                    waiter.condition.signal();
+                }
+            }
+
+            // Verificar e acordar notifiers de vendas consecutivas
+            for (ConsecutiveNotifier waiter : consecutiveNotifiers) {
+                if (waiter.satisfiedProduct == null && consecutiveCount >= waiter.n) {
+                    waiter.satisfiedProduct = product;
+                    waiter.condition.signal();
+                }
+            }
+            
         } finally {
             lock.writeLock().unlock();
         }
     }
-    
-    public void addEvent(Event event) {
-        lock.writeLock().lock();
-        try {
-            currentDay.events.add(event);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
+
     
     public void newDay() {
         lock.writeLock().lock();
         try {
-            // 1. Marcar dia atual como completo
+
+            for (SimultaneousNotifier notifier : simultaneousNotifiers) {
+                if (!notifier.satisfied) {
+                    notifier.dayEnded = true;
+                    notifier.condition.signal();
+                }
+            }
+            
+            for (ConsecutiveNotifier notifier : consecutiveNotifiers) {
+                if (notifier.satisfiedProduct == null) {
+                    notifier.dayEnded = true;
+                    notifier.condition.signal();
+                }
+            }
+
             currentDay.completed = true;
             
-            // 2. Adicionar ao início do histórico (mais recente primeiro)
+            // Adicionar ao início do histórico (mais recente primeiro)
             historicalDays.add(0, currentDay);
             
-            // 3. Remover dias antigos se exceder o limite máximo q estabelecemos (limpar cache antes)
+            // Remover dias antigos se exceder o limite e limpar cache 
             while (historicalDays.size() > maxDays) {
                 DayData oldDay = historicalDays.remove(historicalDays.size() - 1);
                 oldDay.clearCache();  // Descartar cache que já não é relevante
             }
             
-            // 4. Criar um novo dia corrente
+            // Criar um novo dia
             currentDayId++;
             currentDay = new DayData(currentDayId);
+
+            // Reset notificações diárias
+            productsSoldToday.clear();
+            lastProduct = null;
+            consecutiveCount = 0;
             
             System.out.println("[TIME] Novo dia: " + currentDayId + 
                              " (histórico: " + historicalDays.size() + "/" + maxDays + " dias)");
@@ -229,10 +265,6 @@ public class TimeSeriesManager {
         }
     }
     
-    /**
-     * Obtém a agregação combinada para um produto nos últimos d dias.
-     * Usa cache por dia - só calcula uma vez por produto/dia.
-     */
     private ProductAggregation getAggregation(String product, int days) {
         lock.readLock().lock();
         try {
@@ -261,9 +293,7 @@ public class TimeSeriesManager {
         }
     }
     
-    /**
-     * Quantidade vendas: devolve a quantidade de unidades de um produto p vendidas nos últimos d dias 
-     */
+
     public int getQuantitySold(String product, int days) {
         if (days < 1 || days > maxDays) {
             throw new IllegalArgumentException("days deve estar entre 1 e " + maxDays);
@@ -276,9 +306,6 @@ public class TimeSeriesManager {
         return agg.getTotalQuantity();
     }
     
-    /**
-     * Volume de vendas: devolve o valor total das vendas de um produto nos últimos d dias 
-     */
     public double getSalesVolume(String product, int days) {
         if (days < 1 || days > maxDays) {
             throw new IllegalArgumentException("days deve estar entre 1 e " + maxDays);
@@ -291,9 +318,7 @@ public class TimeSeriesManager {
         return agg.getTotalVolume();
     }
     
-    /**
-     * Preço médio venda: devolve o preço médio de venda de um produtonos últimos d dias (ponderado pela quantidade)
-     */
+
     public double getAveragePrice(String product, int days) {
         if (days < 1 || days > maxDays) {
             throw new IllegalArgumentException("days deve estar entre 1 e " + maxDays);
@@ -306,9 +331,6 @@ public class TimeSeriesManager {
         return agg.getAveragePrice();
     }
     
-    /**
-     * Preço máximo de venda: devolve o preço máximo de venda de um produto nos últimos d dias
-     */
     public double getMaxPrice(String product, int days) {
         if (days < 1 || days > maxDays) {
             throw new IllegalArgumentException("days deve estar entre 1 e " + maxDays);
@@ -340,5 +362,70 @@ public class TimeSeriesManager {
             lock.readLock().unlock();
         }
 
+    }
+
+    public boolean waitSimultaneous(String p1, String p2) {
+        lock.writeLock().lock();
+        try {
+            // Verificar se já estão ambos vendidos
+            if (productsSoldToday.contains(p1) && productsSoldToday.contains(p2)) {
+                return true;
+            }
+            
+            // Criar waiter e registar
+            Condition myCondition = lock.writeLock().newCondition();
+            SimultaneousNotifier waiter = new SimultaneousNotifier(p1, p2, myCondition);
+            simultaneousNotifiers.add(waiter);
+            
+            try {
+                // Esperar até ser acordado
+                while (!waiter.satisfied && !waiter.dayEnded) {
+                    myCondition.await();
+                }
+                
+                return waiter.satisfied;  // devolve este booleano que é alterado na função add event se for necesário notificação
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } finally {
+                simultaneousNotifiers.remove(waiter);
+            }
+            
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+
+    public String waitConsecutive(int n) {
+        lock.writeLock().lock();
+        try {
+            // Verificar se já há n consecutivas
+            if (consecutiveCount >= n && lastProduct != null) {
+                return lastProduct;
+            }
+            
+            Condition myCondition = lock.writeLock().newCondition();
+            ConsecutiveNotifier waiter = new ConsecutiveNotifier(n, myCondition);
+            consecutiveNotifiers.add(waiter);
+
+            try {
+                while (waiter.satisfiedProduct == null && !waiter.dayEnded) {
+                    myCondition.await();
+                }
+
+                return waiter.satisfiedProduct;  // mesmo que na função acima
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            } finally {
+                consecutiveNotifiers.remove(waiter);
+            }
+            
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 }

@@ -228,51 +228,97 @@ public class Client implements AutoCloseable {
     }
 
     public List<Event> filterEvents(int dayOffset, Set<String> products) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream dos = new DataOutputStream(baos);
-    dos.writeInt(Tags.TAG_FILTER_EVENTS);
-    dos.writeInt(dayOffset);
-    dos.writeInt(products.size());
-    for (String prod : products) {
-        dos.writeUTF(prod);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_FILTER_EVENTS);
+        dos.writeInt(dayOffset);
+        dos.writeInt(products.size());
+        for (String prod : products) {
+            dos.writeUTF(prod);
+        }
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            byte status = dis.readByte();
+            if (status != Tags.STATUS_OK) {
+                return null;
+            }
+            
+            //  DESERIALIZAÇÃO 
+            
+            // Ler dicionário
+            int numProducts = dis.readInt();
+            String[] productDict = new String[numProducts];
+            for (int i = 0; i < numProducts; i++) {
+                productDict[i] = dis.readUTF();
+            }
+            
+            // Ler eventos e reconstruir
+            int numEvents = dis.readInt();
+            List<Event> events = new ArrayList<>();
+            for (int i = 0; i < numEvents; i++) {
+                int idx = dis.readInt();
+                int quantity = dis.readInt();
+                double price = dis.readDouble();
+                events.add(new Event(productDict[idx], quantity, price));
+            }
+            
+            return events;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
     }
 
-    int tag = nextTag();
-    try {
-        demux.send(tag, baos.toByteArray());
-        byte[] resp = demux.receive(tag);
-        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
-        
-        byte status = dis.readByte();
-        if (status != Tags.STATUS_OK) {
-            return null;
+
+    public Boolean waitSimultaneous(String p1, String p2) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_WAIT_SIMULTANEOUS);
+        dos.writeUTF(p1);
+        dos.writeUTF(p2);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            if (dis.readByte() == Tags.STATUS_OK) {
+                return dis.readBoolean();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-        
-        //  DESERIALIZAÇÃO 
-        
-        // Ler dicionário
-        int numProducts = dis.readInt();
-        String[] productDict = new String[numProducts];
-        for (int i = 0; i < numProducts; i++) {
-            productDict[i] = dis.readUTF();
-        }
-        
-        // Ler eventos e reconstruir
-        int numEvents = dis.readInt();
-        List<Event> events = new ArrayList<>();
-        for (int i = 0; i < numEvents; i++) {
-            int idx = dis.readInt();
-            int quantity = dis.readInt();
-            double price = dis.readDouble();
-            events.add(new Event(productDict[idx], quantity, price));
-        }
-        
-        return events;
-    } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
+        return null;
     }
-    return null;
-}
+
+    public String waitConsecutive(int n) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        dos.writeInt(Tags.TAG_WAIT_CONSECUTIVE);
+        dos.writeInt(n);
+
+        int tag = nextTag();
+        try {
+            demux.send(tag, baos.toByteArray());
+            byte[] resp = demux.receive(tag);
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+            
+            if (dis.readByte() == Tags.STATUS_OK) {
+                if (dis.readBoolean()) {
+                    return dis.readUTF();
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return null;
+    }
 
     public boolean isAuthenticated() { return authenticated; }
     public boolean isAdmin() { return admin; }

@@ -150,6 +150,14 @@ public class ClientWorker implements Runnable {
             case Tags.TAG_FILTER_EVENTS:
                 handleFilterEvents(dis, dos);
                 break;
+
+            // Notificadores
+            case Tags.TAG_WAIT_SIMULTANEOUS:
+                handleWaitSimultaneous(dis, dos);
+                break;
+            case Tags.TAG_WAIT_CONSECUTIVE:
+                handleWaitConsecutive(dis, dos);
+                break;
                 
             default:
                 dos.writeByte(Tags.STATUS_ERROR);
@@ -357,61 +365,85 @@ public class ClientWorker implements Runnable {
     }
 
     private void handleFilterEvents(DataInputStream dis, DataOutputStream dos) throws IOException {
-    int dayOffset = dis.readInt();
-    int numProducts = dis.readInt();
+        int dayOffset = dis.readInt();
+        int numProducts = dis.readInt();
+        
+        // ler conjunto c
+        Set<String> products = new HashSet<>();
+        for (int i = 0; i < numProducts; i++) {
+            products.add(dis.readUTF());
+        }
+        
+        if (dayOffset < 1 || dayOffset > tsManager.getMaxDays() || products.isEmpty()) {
+            dos.writeByte(Tags.STATUS_INVALID_PARAMS);
+            return;
+        }
+
+        if (!tsManager.hasEnoughHistory(dayOffset)) {
+            dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
+            return;
+        }
+        
     
-    // ler conjunto c
-    Set<String> products = new HashSet<>();
-    for (int i = 0; i < numProducts; i++) {
-        products.add(dis.readUTF());
-    }
-    
-    if (dayOffset < 1 || dayOffset > tsManager.getMaxDays() || products.isEmpty()) {
-        dos.writeByte(Tags.STATUS_INVALID_PARAMS);
-        return;
+        List<Event> events = tsManager.filterEventsByProducts(dayOffset, products);  // função em timeseriesque devolve eventos de todos o produtos em c
+        if (events == null) {
+            dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
+            return;
+        }
+        
+        // Dicionário de produtos
+        Map<String, Integer> productIndex = new HashMap<>();
+        List<String> productList = new ArrayList<>();
+        
+        for (Event event : events) {
+            String prod = event.getProduct();
+            if (!productIndex.containsKey(prod)) {
+                productIndex.put(prod, productList.size());
+                productList.add(prod);
+            }
+        }
+        
+        dos.writeByte(Tags.STATUS_OK);
+        
+        dos.writeInt(productList.size()); // aqui escreve tamanho do dicionário e o mesmo a seguir 
+        for (String prod : productList) {
+            dos.writeUTF(prod);
+        }
+        
+        // Eventos (com dicionário)
+        dos.writeInt(events.size());
+        for (Event event : events) {
+            int idx = productIndex.get(event.getProduct());
+            dos.writeInt(idx);
+            dos.writeInt(event.getQuantity());
+            dos.writeDouble(event.getPrice());
+        }
+        
+        System.out.println("[FILTER] Dia " + dayOffset + ": " + events.size() + 
+                        " eventos, " + productList.size() + " produtos distintos");
     }
 
-    if (!tsManager.hasEnoughHistory(dayOffset)) {
-        dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
-        return;
+    private void handleWaitSimultaneous(DataInputStream dis, DataOutputStream dos) throws IOException {
+        String p1 = dis.readUTF();
+        String p2 = dis.readUTF();
+        
+        boolean result = tsManager.waitSimultaneous(p1, p2);
+        
+        dos.writeByte(Tags.STATUS_OK);
+        dos.writeBoolean(result);
     }
-    
-  
-    List<Event> events = tsManager.filterEventsByProducts(dayOffset, products);  // função em timeseriesque devolve eventos de todos o produtos em c
-    if (events == null) {
-        dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
-        return;
-    }
-    
-    // Dicionário de produtos
-    Map<String, Integer> productIndex = new HashMap<>();
-    List<String> productList = new ArrayList<>();
-    
-    for (Event event : events) {
-        String prod = event.getProduct();
-        if (!productIndex.containsKey(prod)) {
-            productIndex.put(prod, productList.size());
-            productList.add(prod);
+
+    private void handleWaitConsecutive(DataInputStream dis, DataOutputStream dos) throws IOException {
+        int n = dis.readInt();
+
+        String result = tsManager.waitConsecutive(n);
+
+        dos.writeByte(Tags.STATUS_OK);
+        if (result != null) {
+            dos.writeBoolean(true);
+            dos.writeUTF(result);
+        } else {
+            dos.writeBoolean(false);
         }
     }
-    
-    dos.writeByte(Tags.STATUS_OK);
-    
-    dos.writeInt(productList.size()); // aqui escreve tamanho do dicionário e o mesmo a seguir 
-    for (String prod : productList) {
-        dos.writeUTF(prod);
-    }
-    
-    // Eventos (com dicionário)
-    dos.writeInt(events.size());
-    for (Event event : events) {
-        int idx = productIndex.get(event.getProduct());
-        dos.writeInt(idx);
-        dos.writeInt(event.getQuantity());
-        dos.writeDouble(event.getPrice());
-    }
-    
-    System.out.println("[FILTER] Dia " + dayOffset + ": " + events.size() + 
-                       " eventos, " + productList.size() + " produtos distintos");
-}
 }

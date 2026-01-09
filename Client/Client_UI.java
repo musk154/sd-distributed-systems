@@ -5,25 +5,65 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
+
 import Common.Event;
 
 public class Client_UI {
     private Client client;
     private Scanner sc = new Scanner(System.in);
 
+    private final ReentrantLock printLock = new ReentrantLock();
+
+    private void print(String msg) {
+        printLock.lock();
+        try {
+            System.out.print(msg);
+        } finally {
+            printLock.unlock();
+        }
+    }
+
+    private void println(String msg) {
+        printLock.lock();
+        try {
+            System.out.println(msg);
+        } finally {
+            printLock.unlock();
+        }
+    }
+
+    private void println() {
+        printLock.lock();
+        try {
+            System.out.println();
+        } finally {
+            printLock.unlock();
+        }
+    }
+
+    private void printf(String format, Object... args) {
+        printLock.lock();
+        try {
+            System.out.printf(format, args);
+        } finally {
+            printLock.unlock();
+        }
+    }
+
     public static void main(String[] args) {
         new Client_UI().run();
     }
 
     private void run() {
-        System.out.println("=== Cliente SD ===");
+        println("=== Cliente SD ===");
         
         try {
-            System.out.print("A conectar...");
+            print("A conectar...");
             client = new Client("localhost", 12345);
-            System.out.println(" OK!");
+            println(" OK!");
         } catch (IOException e) {
-            System.out.println(" ERRO: " + e.getMessage());
+            println(" ERRO: " + e.getMessage());
             return;
         }
 
@@ -35,58 +75,59 @@ public class Client_UI {
 
     private void menuLogin() {
         while (!client.isAuthenticated()) {
-            System.out.println("\n=== Registo / Login ===");
-            System.out.println("0 - Login");
-            System.out.println("1 - Registar");
-            System.out.println("2 - Sair");
-            System.out.print("> ");
+            println("\n=== Registo / Login ===");
+            println("0 - Login");
+            println("1 - Registar");
+            println("2 - Sair");
+            print("> ");
 
             String op = sc.nextLine();
             try {
                 if (op.equals("0")) {
-                    System.out.print("Username: ");
+                    print("Username: ");
                     String user = sc.nextLine();
-                    System.out.print("Password: ");
+                    print("Password: ");
                     String pass = sc.nextLine();
                     
                     if (client.login(user, pass)) {
-                        System.out.println("Login OK!" + (client.isAdmin() ? " (ADMIN)" : ""));
+                        println("Login OK!" + (client.isAdmin() ? " (ADMIN)" : ""));
                     } else {
-                        System.out.println("Credenciais inválidas.");
+                        println("Credenciais inválidas.");
                     }
                 } else if (op.equals("1")) {
-                    System.out.print("Username: ");
+                    print("Username: ");
                     String user = sc.nextLine();
-                    System.out.print("Password: ");
+                    print("Password: ");
                     String pass = sc.nextLine();
                     
                     if (client.registar(user, pass)) {
-                        System.out.println("Registo OK! Pode fazer login.");
+                        println("Registo OK! Pode fazer login.");
                     } else {
-                        System.out.println("Username já existe.");
+                        println("Username já existe.");
                     }
                 } else if (op.equals("2")) {
-                    System.out.println("Adeus!");
+                    println("Adeus!");
                     System.exit(0);
                 }
             } catch (IOException e) {
-                System.out.println("Erro: " + e.getMessage());
+                println("Erro: " + e.getMessage());
             }
         }
     }
 
     private void menuPrincipal() {
         while (true) {
-            System.out.println("\n=== Menu Principal ===");
-            System.out.println("0 - Adicionar evento de venda");
-            System.out.println("1 - Ver dia atual");
-            System.out.println("2 - Consultar agregações");
-            System.out.println("3 - Filtrar eventos por produtos");
+            println("\n=== Menu Principal ===");
+            println("0 - Adicionar evento de venda");
+            println("1 - Ver dia atual");
+            println("2 - Consultar agregações");
+            println("3 - Notificações");
+            println("4 - Filtrar eventos por produtos");
             if (client.isAdmin()) {
-                System.out.println("4 - Avançar dia (ADMIN)");
+                println("5 - Avançar dia (ADMIN)");
             }
-            System.out.println("9 - Sair");
-            System.out.print("> ");
+            println("6 - Sair");
+            print("> ");
 
             String op = sc.nextLine();
             try {
@@ -96,7 +137,7 @@ public class Client_UI {
                         break;
 
                     case "1":
-                        System.out.println("Estamos no dia: " + client.getCurrentDayId());
+                        println("Estamos no dia: " + client.getCurrentDayId());
                         break;
 
                     case "2":
@@ -104,114 +145,117 @@ public class Client_UI {
                         break;
 
                     case "3":
-                        menuFiltrarEventos();
+                        menuNotificacoes();
                         break;
 
                     case "4":
+                        menuFiltrarEventos();
+                        break;
+
+                    case "5":
                         if (client.isAdmin()) {
                             menuNewDay();
                         } else {
-                            System.out.println("Opção inválida.");
+                            println("Opção inválida.");
                         }
                         break;
 
 
-                    case "9":
-                        System.out.println("Adeus!");
+                    case "6":
+                        println("Adeus!");
                         return;
                         
                     default:
-                        System.out.println("Opção inválida.");
+                        println("Opção inválida.");
                 }
             } catch (IOException e) {
-                System.out.println("Erro: " + e.getMessage());
+                println("Erro: " + e.getMessage());
             }
         }
     }
 
     private void menuAddEvent() throws IOException {
-        System.out.print("Produto: ");
+        print("Produto: ");
         String product = sc.nextLine();
         if (product.isEmpty()) {
-            System.out.println("Produto não pode ser vazio.");
+            println("Produto não pode ser vazio.");
             return;
         }
         
-        System.out.print("Quantidade: ");
+        print("Quantidade: ");
         int quantity;
         try {
             quantity = Integer.parseInt(sc.nextLine());
             if (quantity <= 0) {
-                System.out.println("Quantidade deve ser > 0.");
+                println("Quantidade deve ser > 0.");
                 return;
             }
         } catch (NumberFormatException e) {
-            System.out.println("Quantidade inválida.");
+            println("Quantidade inválida.");
             return;
         }
         
-        System.out.print("Preço: ");
+        print("Preço: ");
         double price;
         try {
             price = Double.parseDouble(sc.nextLine().replace(",", "."));
             if (price < 0) {
-                System.out.println("Preço deve ser >= 0.");
+                println("Preço deve ser >= 0.");
                 return;
             }
         } catch (NumberFormatException e) {
-            System.out.println("Preço inválido.");
+            println("Preço inválido.");
             return;
         }
         
         if (client.addEvent(product, quantity, price)) {
-            System.out.println("Evento adicionado com sucesso!");
-            System.out.printf("  %s: %d unidades a %.2f€ cada%n", product, quantity, price);
+            println("Evento adicionado com sucesso!");
+            printf("  %s: %d unidades a %.2f€ cada%n", product, quantity, price);
         } else {
-            System.out.println("Erro ao adicionar evento.");
+            println("Erro ao adicionar evento.");
         }
     }
 
     private void menuNewDay() throws IOException {
         int newDayId = client.newDay();
         if (newDayId >= 0) {
-            System.out.println("Novo dia iniciado! Dia atual: " + newDayId);
+            println("Novo dia iniciado! Dia atual: " + newDayId);
         } else {
-            System.out.println("Erro ao avançar dia (apenas admin pode fazer isto).");
+            println("Erro ao avançar dia (apenas admin pode fazer isto).");
         }
     }
 
     private void menuAgregacoes() throws IOException {
-        System.out.println("\n=== Agregações (dias anteriores) ===");
-        System.out.println("0 - Quantidade vendida");
-        System.out.println("1 - Volume de vendas (valor total)");
-        System.out.println("2 - Preço médio");
-        System.out.println("3 - Preço máximo");
-        System.out.println("4 - Todas as agregações de um produto");
-        System.out.println("9 - Voltar");
-        System.out.print("> ");
+        println("\n=== Agregações (dias anteriores) ===");
+        println("0 - Quantidade vendida");
+        println("1 - Volume de vendas (valor total)");
+        println("2 - Preço médio");
+        println("3 - Preço máximo");
+        println("4 - Todas as agregações de um produto");
+        println("9 - Voltar");
+        print("> ");
 
         String op = sc.nextLine();
 
         if (op.equals("9")) return;
 
-        // Para todas as opções, pedir produto e dias
-        System.out.print("Produto: ");
+        print("Produto: ");
         String product = sc.nextLine();
         if (product.isEmpty()) {
-            System.out.println("Produto não pode ser vazio.");
+            println("Produto não pode ser vazio.");
             return;
         }
 
-        System.out.print("Número de dias anteriores: ");
+        print("Número de dias anteriores: ");
         int days;
         try {
             days = Integer.parseInt(sc.nextLine());
             if (days < 1) {
-                System.out.println("Dias deve ser >= 1.");
+                println("Dias deve ser >= 1.");
                 return;
             }
         } catch (NumberFormatException e) {
-            System.out.println("Número inválido.");
+            println("Número inválido.");
             return;
         }
 
@@ -232,52 +276,52 @@ public class Client_UI {
                 handleTodasAgregacoes(product, days);
                 break;
             default:
-                System.out.println("Opção inválida.");
+                println("Opção inválida.");
         }
     }
 
     private void handleQuantidade(String product, int days) throws IOException {
         Integer qty = client.getQuantitySold(product, days);
         if (qty != null) {
-            System.out.printf("Quantidade de '%s' vendida nos últimos %d dias: %d unidades%n", 
+            printf("Quantidade de '%s' vendida nos últimos %d dias: %d unidades%n", 
                               product, days, qty);
         } else {
-            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            println("Erro: dados insuficientes ou produto inexistente.");
         }
     }
 
     private void handleVolume(String product, int days) throws IOException {
         Double vol = client.getSalesVolume(product, days);
         if (vol != null) {
-            System.out.printf("Volume de vendas de '%s' nos últimos %d dias: %.2f€%n", 
+            printf("Volume de vendas de '%s' nos últimos %d dias: %.2f€%n", 
                               product, days, vol);
         } else {
-            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            println("Erro: dados insuficientes ou produto inexistente.");
         }
     }
 
     private void handlePrecoMedio(String product, int days) throws IOException {
         Double avg = client.getAveragePrice(product, days);
         if (avg != null) {
-            System.out.printf("Preço médio de '%s' nos últimos %d dias: %.2f€%n", 
+            printf("Preço médio de '%s' nos últimos %d dias: %.2f€%n", 
                               product, days, avg);
         } else {
-            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            println("Erro: dados insuficientes ou produto inexistente.");
         }
     }
 
     private void handlePrecoMaximo(String product, int days) throws IOException {
         Double max = client.getMaxPrice(product, days);
         if (max != null) {
-            System.out.printf("Preço máximo de '%s' nos últimos %d dias: %.2f€%n", 
+            printf("Preço máximo de '%s' nos últimos %d dias: %.2f€%n", 
                               product, days, max);
         } else {
-            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            println("Erro: dados insuficientes ou produto inexistente.");
         }
     }
 
     private void handleTodasAgregacoes(String product, int days) throws IOException {
-        System.out.println("\n--- Agregações para '" + product + "' (últimos " + days + " dias) ---");
+        println("\n--- Agregações para '" + product + "' (últimos " + days + " dias) ---");
         
         Integer qty = client.getQuantitySold(product, days);
         Double vol = client.getSalesVolume(product, days);
@@ -285,67 +329,178 @@ public class Client_UI {
         Double max = client.getMaxPrice(product, days);
 
         if (qty == null && vol == null && avg == null && max == null) {
-            System.out.println("Erro: dados insuficientes ou produto inexistente.");
+            println("Erro: dados insuficientes ou produto inexistente.");
             return;
         }
 
-        if (qty != null) System.out.printf("  Quantidade vendida: %d unidades%n", qty);
-        if (vol != null) System.out.printf("  Volume de vendas:   %.2f€%n", vol);
-        if (avg != null) System.out.printf("  Preço médio:        %.2f€%n", avg);
-        if (max != null) System.out.printf("  Preço máximo:       %.2f€%n", max);
+        if (qty != null) printf("  Quantidade vendida: %d unidades%n", qty);
+        if (vol != null) printf("  Volume de vendas:   %.2f€%n", vol);
+        if (avg != null) printf("  Preço médio:        %.2f€%n", avg);
+        if (max != null) printf("  Preço máximo:       %.2f€%n", max);
     }
 
     private void menuFiltrarEventos() throws IOException {
-        System.out.print("Que dia anterior queres ver Eventos? ");
+        print("Que dia anterior queres ver Eventos? ");
         int dayOffset;
         try {
             dayOffset = Integer.parseInt(sc.nextLine()); 
             if (dayOffset < 1) {
-                System.out.println("Dia deve ser >= 1.");
+                println("Dia deve ser >= 1.");
                 return;  
             }
         } catch (NumberFormatException e) {
-            System.out.println("Número inválido."); 
+            println("Número inválido."); 
             return;
         }
     
-        System.out.println("Produtos a filtrar (escreve 0 para terminar):");
+        println("Produtos a filtrar (escreve 0 para terminar):");
         Set<String> products = new HashSet<>();
 
         while (true) {
-            System.out.print("  Produto: ");
+            print("  Produto: ");
             String produto = sc.nextLine();
             
             if (produto.equals("0")) {
-                break;  // Sai do ciclo
+                break;
             }
             
             if (!produto.isEmpty()) {
                 products.add(produto);
-                System.out.println("    ✓ Adicionado: " + produto);
+                println("    ✓ Adicionado: " + produto);
             }
         }
 
         if (products.isEmpty()) {
-            System.out.println("Deve indicar pelo menos um produto.");
+            println("Deve indicar pelo menos um produto.");
             return;
         }
 
         List<Event> events = client.filterEvents(dayOffset, products);
         if (events == null) {
-            System.out.println("Erro: dados insuficientes ou parâmetros inválidos.");
+            println("Erro: dados insuficientes ou parâmetros inválidos.");
             return;
         }
         
-        System.out.println("\n--- Eventos filtrados (dia -" + dayOffset + ") ---");
+        println("\n--- Eventos filtrados (dia -" + dayOffset + ") ---");
         if (events.isEmpty()) {
-            System.out.println("Nenhum evento encontrado para os produtos indicados.");
+            println("Nenhum evento encontrado para os produtos indicados.");
         } else {
             for (Event e : events) {
-                System.out.printf("  %s: %d unidades a %.2f€%n", 
+                printf("  %s: %d unidades a %.2f€%n", 
                     e.getProduct(), e.getQuantity(), e.getPrice());
             }
-            System.out.println("Total: " + events.size() + " eventos");
+            println("Total: " + events.size() + " eventos");
         }
+    }
+    
+    private void menuNotificacoes() throws IOException {
+        println("\n=== Notificações (dia corrente) ===");
+        println("0 - Esperar vendas simultâneas de 2 produtos");
+        println("1 - Esperar N vendas consecutivas");
+        println("2 - Voltar");
+        print("> ");
+
+        String op = sc.nextLine();
+
+        switch (op) {
+            case "0":
+                menuWaitSimultaneous();
+                break;
+            case "1":
+                menuWaitConsecutive();
+                break;
+            case "2":
+                return;
+            default:
+                println("Opção inválida.");
+        }
+    }
+    
+    private void menuWaitSimultaneous() throws IOException {
+        println("\n--- Vendas Simultâneas ---");
+        println("Vai bloquear até AMBOS os produtos serem vendidos hoje,");
+        println("ou até o dia terminar.");
+        println();
+        
+        print("Produto 1: ");
+        String p1 = sc.nextLine();
+        if (p1.isEmpty()) {
+            println("Produto não pode ser vazio.");
+            return;
+        }
+        
+        print("Produto 2: ");
+        String p2 = sc.nextLine();
+        if (p2.isEmpty()) {
+            println("Produto não pode ser vazio.");
+            return;
+        }
+        
+        println();
+        println("A esperar que '" + p1 + "' e '" + p2 + "' sejam vendidos...");
+        println();
+        
+        new Thread(() -> {
+            try {
+                Boolean result = client.waitSimultaneous(p1, p2);
+                
+                println();
+                println("=== NOTIFICAÇÃO RECEBIDA ===");
+                if (result == null) {
+                    println("Erro na operação de vendas simultâneas.");
+                } else if (result) {
+                    println( p1 + "' e '" + p2 + "' foram vendidos hoje!");
+                } else {
+                    println("O dia terminou antes de ambos serem vendidos.");
+                }
+                println("============================");
+                print("> "); 
+            } catch (IOException e) {
+                println("Erro na notificação: " + e.getMessage());
+            }
+        }).start();
+    }
+    
+    private void menuWaitConsecutive() throws IOException {
+        println("\n--- Vendas Consecutivas ---");
+        println("Vai bloquear até haver N vendas SEGUIDAS do mesmo produto,");
+        println("ou até o dia terminar.");
+        println();
+        
+        print("Número de vendas consecutivas (N): ");
+        int n;
+        try {
+            n = Integer.parseInt(sc.nextLine());
+            if (n < 1) {
+                println("N deve ser >= 1.");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            println("Número inválido.");
+            return;
+        }
+        
+        println();
+        println("A esperar por " + n + " vendas consecutivas do mesmo produto...");
+        println();
+        
+        final int finalN = n;
+        new Thread(() -> {
+            try {
+                String result = client.waitConsecutive(finalN);
+                
+                println();
+                println("=== NOTIFICAÇÃO RECEBIDA ===");
+                if (result != null) {
+                    println("Houve " + finalN + " vendas consecutivas de: " + result);
+                } else {
+                    println("O dia terminou antes de haver " + finalN + " vendas consecutivas.");
+                }
+                println("============================");
+                print("> "); 
+            } catch (IOException e) {
+                println("Erro na notificação: " + e.getMessage());
+            }
+        }).start();
     }
 }
