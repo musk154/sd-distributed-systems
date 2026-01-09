@@ -1,4 +1,4 @@
-package Server;
+package Common;
 
 import java.io.DataOutputStream;
 import java.io.IOException;

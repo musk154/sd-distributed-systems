@@ -3,8 +3,11 @@ package Server;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import Common.Event;
 
 public class TimeSeriesManager {
     
@@ -318,4 +321,24 @@ public class TimeSeriesManager {
         return agg.getMaxPrice();
     }
 
+    public List<Event> filterEventsByProducts(int dayOffset, Set<String> products) {
+        lock.readLock().lock();
+        try {
+            int index = dayOffset - 1;
+            if (index < 0 || index >= historicalDays.size()) {
+                return null;
+            }
+            
+            List<Event> result = new ArrayList<>();
+            for (Event event : historicalDays.get(index).events) {
+                if (products.contains(event.getProduct())) {
+                    result.add(event);
+                }
+            }  
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+
+    }
 }

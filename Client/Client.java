@@ -1,9 +1,11 @@
 package Client;
 
-import Common.Connection;
-import Common.Tags;
+import Common.*;
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -224,6 +226,53 @@ public class Client implements AutoCloseable {
         }
         return null;
     }
+
+    public List<Event> filterEvents(int dayOffset, Set<String> products) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(baos);
+    dos.writeInt(Tags.TAG_FILTER_EVENTS);
+    dos.writeInt(dayOffset);
+    dos.writeInt(products.size());
+    for (String prod : products) {
+        dos.writeUTF(prod);
+    }
+
+    int tag = nextTag();
+    try {
+        demux.send(tag, baos.toByteArray());
+        byte[] resp = demux.receive(tag);
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(resp));
+        
+        byte status = dis.readByte();
+        if (status != Tags.STATUS_OK) {
+            return null;
+        }
+        
+        //  DESERIALIZAÇÃO 
+        
+        // Ler dicionário
+        int numProducts = dis.readInt();
+        String[] productDict = new String[numProducts];
+        for (int i = 0; i < numProducts; i++) {
+            productDict[i] = dis.readUTF();
+        }
+        
+        // Ler eventos e reconstruir
+        int numEvents = dis.readInt();
+        List<Event> events = new ArrayList<>();
+        for (int i = 0; i < numEvents; i++) {
+            int idx = dis.readInt();
+            int quantity = dis.readInt();
+            double price = dis.readDouble();
+            events.add(new Event(productDict[idx], quantity, price));
+        }
+        
+        return events;
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+    }
+    return null;
+}
 
     public boolean isAuthenticated() { return authenticated; }
     public boolean isAdmin() { return admin; }

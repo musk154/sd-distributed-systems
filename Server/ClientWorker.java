@@ -6,6 +6,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -140,6 +146,9 @@ public class ClientWorker implements Runnable {
                 break;
             case Tags.TAG_AGG_MAX_PRICE:
                 handleAggMaxPrice(dis, dos);
+                break;
+            case Tags.TAG_FILTER_EVENTS:
+                handleFilterEvents(dis, dos);
                 break;
                 
             default:
@@ -346,4 +355,63 @@ public class ClientWorker implements Runnable {
         dos.writeDouble(maxPrice);
         System.out.println("[AGG] Preço máximo " + product + " (" + days + " dias): " + maxPrice + "€");
     }
+
+    private void handleFilterEvents(DataInputStream dis, DataOutputStream dos) throws IOException {
+    int dayOffset = dis.readInt();
+    int numProducts = dis.readInt();
+    
+    // ler conjunto c
+    Set<String> products = new HashSet<>();
+    for (int i = 0; i < numProducts; i++) {
+        products.add(dis.readUTF());
+    }
+    
+    if (dayOffset < 1 || dayOffset > tsManager.getMaxDays() || products.isEmpty()) {
+        dos.writeByte(Tags.STATUS_INVALID_PARAMS);
+        return;
+    }
+
+    if (!tsManager.hasEnoughHistory(dayOffset)) {
+        dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
+        return;
+    }
+    
+  
+    List<Event> events = tsManager.filterEventsByProducts(dayOffset, products);  // função em timeseriesque devolve eventos de todos o produtos em c
+    if (events == null) {
+        dos.writeByte(Tags.STATUS_NOT_ENOUGH_DATA);
+        return;
+    }
+    
+    // Dicionário de produtos
+    Map<String, Integer> productIndex = new HashMap<>();
+    List<String> productList = new ArrayList<>();
+    
+    for (Event event : events) {
+        String prod = event.getProduct();
+        if (!productIndex.containsKey(prod)) {
+            productIndex.put(prod, productList.size());
+            productList.add(prod);
+        }
+    }
+    
+    dos.writeByte(Tags.STATUS_OK);
+    
+    dos.writeInt(productList.size()); // aqui escreve tamanho do dicionário e o mesmo a seguir 
+    for (String prod : productList) {
+        dos.writeUTF(prod);
+    }
+    
+    // Eventos (com dicionário)
+    dos.writeInt(events.size());
+    for (Event event : events) {
+        int idx = productIndex.get(event.getProduct());
+        dos.writeInt(idx);
+        dos.writeInt(event.getQuantity());
+        dos.writeDouble(event.getPrice());
+    }
+    
+    System.out.println("[FILTER] Dia " + dayOffset + ": " + events.size() + 
+                       " eventos, " + productList.size() + " produtos distintos");
+}
 }

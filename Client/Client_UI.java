@@ -1,7 +1,11 @@
 package Client;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Scanner;
+import java.util.Set;
+import Common.Event;
 
 public class Client_UI {
     private Client client;
@@ -77,8 +81,9 @@ public class Client_UI {
             System.out.println("0 - Adicionar evento de venda");
             System.out.println("1 - Ver dia atual");
             System.out.println("2 - Consultar agregações");
+            System.out.println("3 - Filtrar eventos por produtos");
             if (client.isAdmin()) {
-                System.out.println("3 - Avançar dia (ADMIN)");
+                System.out.println("4 - Avançar dia (ADMIN)");
             }
             System.out.println("9 - Sair");
             System.out.print("> ");
@@ -99,12 +104,17 @@ public class Client_UI {
                         break;
 
                     case "3":
+                        menuFiltrarEventos();
+                        break;
+
+                    case "4":
                         if (client.isAdmin()) {
                             menuNewDay();
                         } else {
                             System.out.println("Opção inválida.");
                         }
                         break;
+
 
                     case "9":
                         System.out.println("Adeus!");
@@ -169,8 +179,6 @@ public class Client_UI {
             System.out.println("Erro ao avançar dia (apenas admin pode fazer isto).");
         }
     }
-
-    // ==================== MENU DE AGREGAÇÕES ====================
 
     private void menuAgregacoes() throws IOException {
         System.out.println("\n=== Agregações (dias anteriores) ===");
@@ -285,5 +293,59 @@ public class Client_UI {
         if (vol != null) System.out.printf("  Volume de vendas:   %.2f€%n", vol);
         if (avg != null) System.out.printf("  Preço médio:        %.2f€%n", avg);
         if (max != null) System.out.printf("  Preço máximo:       %.2f€%n", max);
+    }
+
+    private void menuFiltrarEventos() throws IOException {
+        System.out.print("Que dia anterior queres ver Eventos? ");
+        int dayOffset;
+        try {
+            dayOffset = Integer.parseInt(sc.nextLine()); 
+            if (dayOffset < 1) {
+                System.out.println("Dia deve ser >= 1.");
+                return;  
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("Número inválido."); 
+            return;
+        }
+    
+        System.out.println("Produtos a filtrar (escreve 0 para terminar):");
+        Set<String> products = new HashSet<>();
+
+        while (true) {
+            System.out.print("  Produto: ");
+            String produto = sc.nextLine();
+            
+            if (produto.equals("0")) {
+                break;  // Sai do ciclo
+            }
+            
+            if (!produto.isEmpty()) {
+                products.add(produto);
+                System.out.println("    ✓ Adicionado: " + produto);
+            }
+        }
+
+        if (products.isEmpty()) {
+            System.out.println("Deve indicar pelo menos um produto.");
+            return;
+        }
+
+        List<Event> events = client.filterEvents(dayOffset, products);
+        if (events == null) {
+            System.out.println("Erro: dados insuficientes ou parâmetros inválidos.");
+            return;
+        }
+        
+        System.out.println("\n--- Eventos filtrados (dia -" + dayOffset + ") ---");
+        if (events.isEmpty()) {
+            System.out.println("Nenhum evento encontrado para os produtos indicados.");
+        } else {
+            for (Event e : events) {
+                System.out.printf("  %s: %d unidades a %.2f€%n", 
+                    e.getProduct(), e.getQuantity(), e.getPrice());
+            }
+            System.out.println("Total: " + events.size() + " eventos");
+        }
     }
 }
